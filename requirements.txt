@@ -1,0 +1,12 @@
+numpy==2.4.3
+openff_amber_ff_ports==2025.9.0
+openff_interchange==0.0.0
+openff_nagl==0.0.0
+openff_nagl_models==2025.9.0
+openff_toolkit==0.18.0
+openff_units==0.3.2
+openff_utilities==0.1.16
+OpenMM==8.4.0
+openmmforcefields==0.15.1
+pandas==3.0.1
+rdkit==2025.3.6
