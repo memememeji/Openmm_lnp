@@ -65,7 +65,7 @@ def parse_args():
 
     
     # 环境条件参数
-    parser.add_argument("--ph", type=float, default=7.4, help="Target aqueous pH metadata.")  # 目标水相pH值
+    parser.add_argument("--ph", type=float, default=7.1, help="Target aqueous pH metadata.")  # 目标水相pH值
     parser.add_argument("--temperature", type=float, default=300.0, help="Temperature in K.")  # 温度(开尔文)
     parser.add_argument("--pressure", type=float, default=1.0, help="Pressure in atm.")  # 压力(大气压)
     parser.add_argument("--ionic-strength", type=float, default=0.15, help="Salt concentration in mol/L.")  # 盐浓度(摩尔/升)
@@ -192,33 +192,75 @@ def sample_center(
 
 
 def place_molecules(specs: dict, counts: dict, sphere_radius_nm: float, extra_gap_nm: float, seed: int):
-    rng = np.random.default_rng(seed)
-    placements = []
-    occupied = []
+    """
+    将分子放置在球形空间内，避免分子间碰撞。
 
-    placement_order = ["peg", "helper", "cholesterol", "ionizable"]
-    for key in placement_order:
-        spec = specs[key]
-        for copy_index in range(counts[key]):
-            placed = False
-            for _ in range(2000):
-                center = sample_center(spec, sphere_radius_nm - spec.radius_nm, rng)
-                clash = False
-                for old_center, old_radius in occupied:
-                    min_allowed = spec.radius_nm + old_radius + extra_gap_nm
-                    if np.linalg.norm(center - old_center) < min_allowed:
-                        clash = True
+    策略：
+    1. 调整放置顺序，先放体积较大的分子（cholesterol、helper），再放其余分子；
+    2. 放置失败时自动扩大球半径（最多扩大 1.5 倍）并重试；
+    3. 每轮扩容同时适度缩减 extra_gap_nm 以提升填充成功率；
+    4. 每个分子的随机采样次数从 2000 提升至 5000。
+    """
+    # 先放体积较大/数量较多的分子，降低后续分子因空间不足而失败的概率
+    placement_order = ["cholesterol", "helper", "peg", "ionizable"]
+
+    MAX_RADIUS_SCALE = 1.5   # 球半径最多自动扩大到初始值的 1.5 倍
+    RADIUS_STEP = 0.05        # 每次扩容步长（nm）
+    MAX_SAMPLE_ATTEMPTS = 5000
+
+    current_radius = sphere_radius_nm
+    current_gap = extra_gap_nm
+
+    while current_radius <= sphere_radius_nm * MAX_RADIUS_SCALE:
+        rng = np.random.default_rng(seed)
+        placements = []
+        occupied = []
+        failed_key = None
+
+        for key in placement_order:
+            spec = specs[key]
+            for copy_index in range(counts[key]):
+                placed = False
+                for _ in range(MAX_SAMPLE_ATTEMPTS):
+                    center = sample_center(spec, current_radius - spec.radius_nm, rng)
+                    clash = False
+                    for old_center, old_radius in occupied:
+                        min_allowed = spec.radius_nm + old_radius + current_gap
+                        if np.linalg.norm(center - old_center) < min_allowed:
+                            clash = True
+                            break
+                    if not clash:
+                        placements.append((spec, copy_index + 1, center, random_rotation_matrix(rng)))
+                        occupied.append((center, spec.radius_nm))
+                        placed = True
                         break
-                if not clash:
-                    placements.append((spec, copy_index + 1, center, random_rotation_matrix(rng)))
-                    occupied.append((center, spec.radius_nm))
-                    placed = True
+                if not placed:
+                    failed_key = key
                     break
-            if not placed:
-                raise RuntimeError(
-                    f"Could not place {key} molecule {copy_index + 1}. Increase --sphere-radius-nm or lower --total-molecules."
+            if failed_key:
+                break
+
+        if failed_key is None:
+            if current_radius > sphere_radius_nm:
+                print(
+                    f"[place_molecules] Auto-expanded sphere radius to {current_radius:.3f} nm "
+                    f"(gap={current_gap:.3f} nm) to fit all molecules."
                 )
-    return placements
+            return placements
+
+        # 放置失败：扩大球半径，同时略微缩减间隙以提升下一轮的填充率
+        print(
+            f"[place_molecules] Could not place {failed_key} at radius={current_radius:.3f} nm, "
+            f"gap={current_gap:.4f} nm. Expanding radius by {RADIUS_STEP} nm and retrying..."
+        )
+        current_radius += RADIUS_STEP
+        current_gap = max(0.0, current_gap - 0.005)
+
+    raise RuntimeError(
+        f"Could not place all molecules even after expanding sphere radius to "
+        f"{current_radius:.3f} nm. Try increasing --sphere-radius-nm manually or "
+        f"lowering --total-molecules."
+    )
 
 
 def transform_positions(positions_nm, rotation: np.ndarray, center_nm: np.ndarray):
@@ -271,11 +313,11 @@ def main():
         "cholesterol": Path(args.lipid_d).expanduser().resolve(),
     }
 
-    missing = [str(path) for path in input_paths.values() if not path.exists()]
+    missing = [str(path) for path in input_paths.values() if not path.exists()]  # 检查文件是否存在
     if missing:
         raise FileNotFoundError("Missing input PDB(s): " + ", ".join(missing))
 
-    counts = allocate_counts(args.total_molecules)
+    counts = allocate_counts(args.total_molecules) 
     specs = {key: prepare_spec(key, path) for key, path in input_paths.items()}
 
     sphere_radius_nm = args.sphere_radius_nm or choose_sphere_radius(specs, counts)

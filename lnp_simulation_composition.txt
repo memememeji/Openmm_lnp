@@ -1,0 +1,9 @@
+Target pH metadata: 7.4
+Total molecules: 200
+Ionizable lipid (A): 70
+Helper lipid (B): 32
+PEG lipid (C): 5
+Cholesterol (D): 93
+Ionic strength (M): 0.15
+Positive ion: Na+
+Negative ion: Cl-
