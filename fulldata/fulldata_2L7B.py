@@ -49,10 +49,10 @@ import pandas as pd
 from pathlib import Path
 
 
-df = pd.read_csv('data/AGILE_smiles_with_value_group.csv')
+df = pd.read_csv('data/Agile_finetune.csv')
 # 在df中找到arg.mol1对应的combined_mol_SMILES
 label = Path(args.mol1).stem
-subset = df.loc[df['label'] == label, 'combined_mol_SMILES']
+subset = df.loc[df['label'] == label, 'smiles']      # ?????
 if not subset.empty:
     smiles = subset.iloc[0]
     print("success with"+smiles)
