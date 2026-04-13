@@ -18,7 +18,7 @@ def illipid2pdb(index,smiles):
     mol.generate_conformers(n_conformers=1)
     mol.assign_partial_charges("gasteiger")
     rdmol = mol.to_rdkit()
-    Chem.MolToPDBFile(rdmol,"pdb_folder/"+str(index)+".pdb")
+    Chem.MolToPDBFile(rdmol,f"pdb_folder/{index}.pdb")
     return None
 
 

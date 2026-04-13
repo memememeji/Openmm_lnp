@@ -51,8 +51,9 @@ from pathlib import Path
 
 df = pd.read_csv('data/Agile_finetune.csv')
 # 在df中找到arg.mol1对应的combined_mol_SMILES
-label = Path(args.mol1).stem
-subset = df.loc[df['label'] == label, 'smiles']      # ?????
+index = Path(args.mol1).stem
+index = int(index)
+subset = df.loc[df['index'] == index, 'smiles']
 if not subset.empty:
     smiles = subset.iloc[0]
     print("success with"+smiles)
@@ -206,7 +207,7 @@ simulation.minimizeEnergy(maxIterations=500)
 # simulation.reporters.append(DCDReporter(args.output, args.report_interval))
 simulation.reporters.append(
     StateDataReporter(
-        "energylog_folder/"+label+".csv",
+        f"energylog_folder/energy_{index}.csv",
         args.report_interval,
         step=True,
         time=True,
@@ -270,7 +271,7 @@ if remainder:
 
 # ── 9. 保存相互作用能 CSV ──────────────────────────────────────────────────────
 import csv
-with open("interaction_folder/"+label+".csv", "w", newline="") as f:
+with open(f"interaction_folder/interaction_{index}.csv", "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=interaction_log[0].keys())
     writer.writeheader()
     writer.writerows(interaction_log)
@@ -299,6 +300,21 @@ com2 = pos[mol2_indices].mean(axis=0)
 dist = np.linalg.norm(com1 - com2)
 # print(f"  质心距离: {dist:.3f} Å")
 
-import function
+# import function
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
 
-function.plot_csv_trend("interaction_folder/"+label+".csv")
+def plot_csv_trend(file_path):
+    # Load the CSV file into a pandas DataFrame
+    df = pd.read_csv(file_path)
+    # Plot the data
+    plt.plot(df['step'], df['inter_energy_kcal'])
+    plt.xlabel('step')
+    plt.ylabel('inter_energy_kcal')
+    plt.title('Trend of inter_energy_kcal vs. step')
+    # plt.show()
+    label = Path(file_path).stem
+    plt.savefig(f'fig_folder/intera_{index}.png')
+
+plot_csv_trend(f"interaction_folder/interaction_{index}.csv")
